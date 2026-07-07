@@ -19,7 +19,7 @@ object StatusWord
     {
         if (response.size < 2) return STATUS_FAILED
 
-        val sw = response.takeLast(2).joinToString { "%02X".format(it) }
+        val sw = response.takeLast(2).joinToString("") { "%02X".format(it) }
 
         return map[sw] ?: STATUS_FAILED
     }
