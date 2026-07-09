@@ -14,7 +14,9 @@ class NfcCardReader
     fun readCard(tag: Tag): List<DiscoveredAid>
     {
         val isoDep = IsoDep.get(tag) ?: return emptyList()
-        val discoverableAids = mutableListOf<DiscoveredAid>()
+        var discoverableAids = mutableListOf<DiscoveredAid>()
+
+        masterList.clear()
 
         try
         {
