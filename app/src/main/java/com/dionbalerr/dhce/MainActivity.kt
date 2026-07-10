@@ -3,12 +3,14 @@ package com.dionbalerr.dhce
 import androidx.compose.ui.graphics.Color
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.nfc.tech.IsoDep
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -59,7 +61,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                         discoveredAids = discoveredAids,
                         onScanStart = { startNfcScanningSession() },
                         onScanStop = { isTimeout -> stopNfcScanningSession(isTimeout)},
-//                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.padding(innerPadding)
                     )
                 }
             }
@@ -70,18 +72,30 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     {
         if (tag != null)
         {
-            val results = cardReader.readCard(tag)
+            val isoDep = IsoDep.get(tag) ?: return
+            isoDep.connect()
+            isoDep.timeout = 500
 
+            val responsePpse = cardReader.selectPpse(isoDep)
+            val results = cardReader.parseBerTlvTags(responsePpse, 0, responsePpse.size)
+            cardReader.printMasterList()
+            val aids = cardReader.parseAids()
+
+            isoDep.close()
             nfcAdapter?.disableReaderMode(this)
 
             runOnUiThread()
             {
                 isScanning = false
-                discoveredAids = results
+                discoveredAids = aids
+//                val testResult = results
                 statusText =
-                    if (results.isNotEmpty()) {
+                    if (results.isNotEmpty())
+                    {
                         "Status: Read complete!"
-                    } else {
+                    }
+                    else
+                    {
                         "Status: Card detected\n" +
                                 "$discoveredAids"
                     }
