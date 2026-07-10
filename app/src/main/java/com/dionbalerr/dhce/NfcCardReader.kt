@@ -1,48 +1,36 @@
 package com.dionbalerr.dhce
 
-import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import android.util.Log
 import java.io.IOException
+import java.util.Collections.emptyList
 import kotlin.experimental.and
 
 data class DiscoveredAid(val aid: String, val priority: Int)
+data class Tlv(val tag: ByteArray, val length: Int, val value: ByteArray)
 
 class NfcCardReader
 {
-    var masterList = mutableListOf<MutableMap<String, Any>>()
-    fun readCard(tag: Tag): List<DiscoveredAid>
+    var masterList = mutableListOf<Tlv>()
+    var masterAidList = mutableListOf<DiscoveredAid>()
+
+    fun selectPpse(isoDep: IsoDep): ByteArray
     {
-        val isoDep = IsoDep.get(tag) ?: return emptyList()
-        var discoverableAids = mutableListOf<DiscoveredAid>()
+        var byteWithoutSw = byteArrayOf()
 
         masterList.clear()
 
         try
         {
-            isoDep.connect()
-            isoDep.timeout = 500
-
             val responseBytes = isoDep.transceive(CommandApdu.SELECT_PPSE_COMMAND)
             printResponseApdu(responseBytes)
+            val bool = (StatusWord.matchSw(responseBytes).contentEquals(StatusWord.SUCCESS))
+
             if (StatusWord.matchSw(responseBytes).contentEquals(StatusWord.SUCCESS))
             {
-                val byteWithoutSw = responseBytes.slice(0 until responseBytes.size - 2).toByteArray()
-                parseBerTlvTags(byteWithoutSw, 0, byteWithoutSw.size)
+                byteWithoutSw = responseBytes.slice(0 until responseBytes.size - 2).toByteArray()
             }
-            else return emptyList()
-
-            masterList.forEach()
-            {
-                val tagByte = (it["tag"] as ByteArray).toHexString().uppercase()
-                val length = it["length"]
-                val valueByte = (it["value"] as ByteArray).toHexString().uppercase()
-                Log.i("ByteTime",
-                    "Tag=${tagByte}, " +
-                            "Len=${length}, " +
-                            "Val=${valueByte}"
-                )
-            }
+            else return byteArrayOf()
 
         }
         catch (e: IOException)
@@ -50,10 +38,10 @@ class NfcCardReader
             e.printStackTrace()
         }
 
-        return discoverableAids
+        return byteWithoutSw
     }
 
-    private fun parseBerTlvTags(byteArray: ByteArray, startIndex: Int, endIndex: Int): MutableList<MutableMap<String, Any>>
+    fun parseBerTlvTags(byteArray: ByteArray, startIndex: Int, endIndex: Int): MutableList<Tlv>
     {
         var pointer = startIndex
 
@@ -83,7 +71,7 @@ class NfcCardReader
             map["value"] = value
             pointer += actualLength
 
-            masterList.add(map)
+            masterList.add(Tlv(tag, actualLength, value))
 
             if ((tag[0].toInt() and 0x20) == 0x20)
             {
@@ -95,9 +83,51 @@ class NfcCardReader
         return masterList
     }
 
+    fun parseAids(): MutableList<DiscoveredAid>
+    {
+        masterAidList.clear()
+
+        val aidList = masterList.filter {
+            it.tag.contentEquals(byteArrayOf(0x4F))
+        }
+        if (aidList.isEmpty()) return emptyList()
+
+        val priorityList = masterList.filter {
+            it.tag.contentEquals(byteArrayOf(0x87.toByte()))
+        }
+        val aidPriorityList = aidList.zip(priorityList)
+
+        aidPriorityList.forEach { (aid, priority) ->
+            val aidValue = aid.value.toHexString().uppercase()
+            val priorityValue = priority.value[0].toInt()
+            masterAidList.add(DiscoveredAid(aidValue, priorityValue))
+        }
+
+        masterAidList.forEach {
+            Log.i("ByteTime", "AID: ${it.aid.uppercase()}, Priority: ${it.priority}")
+        }
+
+        return masterAidList
+    }
+
     fun printResponseApdu(byteArray: ByteArray)
     {
         Log.d("RAPDU", byteArray.joinToString(" ")
         { "%02X".format(it) })
+    }
+
+    fun printMasterList()
+    {
+        masterList.forEach()
+        {
+            val tagByte = it.tag.toHexString().uppercase()
+            val length = it.length
+            val valueByte = it.value.toHexString().uppercase()
+            Log.i("ByteTime",
+                "Tag=${tagByte}, " +
+                        "Len=${length}, " +
+                        "Val=${valueByte}"
+            )
+        }
     }
 }
