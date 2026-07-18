@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     private var statusText by mutableStateOf("Status: Ready to scan")
     private var isScanning by mutableStateOf(false)
     private var discoveredAids by mutableStateOf<List<DiscoveredAid>>(emptyList())
+    private var byteArray by mutableStateOf<ByteArray>(byteArrayOf())
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                         statusText = statusText,
                         isScanning = isScanning,
                         discoveredAids = discoveredAids,
+                        byteArray = byteArray,
                         onScanStart = { startNfcScanningSession() },
                         onScanStop = { isTimeout -> stopNfcScanningSession(isTimeout)},
                         modifier = Modifier.padding(innerPadding)
@@ -80,6 +82,15 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             val results = cardReader.parseBerTlvTags(responsePpse, 0, responsePpse.size)
             cardReader.printMasterList()
             val aids = cardReader.parseAids()
+            val responseAids = cardReader.selectAid(isoDep)
+            val resultsSelectAid = cardReader.parseBerTlvTags(responseAids, 0, responseAids.size)
+            cardReader.printSelectAid()
+            val pdol = cardReader.parsePdol()
+            cardReader.printTlvList(pdol)
+
+            val responseGpo = cardReader.getProcessingOptions(isoDep)
+            cardReader.parseGpoTags(responseGpo)
+
 
             isoDep.close()
             nfcAdapter?.disableReaderMode(this)
@@ -88,6 +99,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             {
                 isScanning = false
                 discoveredAids = aids
+                byteArray = responseGpo
 //                val testResult = results
                 statusText =
                     if (results.isNotEmpty())
@@ -97,7 +109,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                     else
                     {
                         "Status: Card detected\n" +
-                                "$discoveredAids"
+                                "$discoveredAids" +
+                                byteArray.contentToString()
                     }
             }
         }
